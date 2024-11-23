@@ -7,7 +7,7 @@ const labels = data.map(e => {
     });
 });
 
-// Simplified chart configuration
+// Config Graphique
 const chartConfigs = [
     {
         id: 'tempChart',
@@ -44,7 +44,7 @@ const commonOptions = {
     }
 };
 
-// Create charts with error handling
+// Création de graphique avec erreur serveur
 chartConfigs.forEach(config => {
     try {
         const ctx = document.getElementById(config.id);
