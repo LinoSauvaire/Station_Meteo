@@ -19,8 +19,22 @@ $resultTemp = $conn->query($requestTemp);
 $resultHum = $conn->query($requestHum);
 $resultPress = $conn->query($requestPress);
 
-$data = array();
-while($row = $result->fetch_assoc()) {
+$params = "SELECT * FROM parameters ORDER BY created_at DESC LIMIT 1";
+$paramResult = $conn->query($params);
+while($rowParams = $paramResult->fetch_assoc()) {
+    $paramsResultat[] = $rowParams;
+}
+
+$requestReading = "SELECT temperature, humidity, readings_time, pression 
+                   FROM readings 
+                   WHERE (temperature BETWEEN " . (int) $paramsResultat[0]['temp_min'] . " AND " . (int) $paramsResultat[0]['temp_max'] . ")
+                     OR (humidity BETWEEN " . (int) $paramsResultat[0]['humidity_min'] . " AND " . (int) $paramsResultat[0]['humidity_max'] . ")
+                     OR (pression BETWEEN " . (int) $paramsResultat[0]['pressure_min'] . " AND " . (int) $paramsResultat[0]['pressure_max'] . ")
+                   ORDER BY readings_time DESC 
+                   LIMIT 10";
+
+$resultReadings = $conn->query($requestReading);
+while ($row = $resultReadings->fetch_assoc()) {
     $data[] = $row;
 }
 
@@ -39,22 +53,29 @@ $conn->close();
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Station météo</title>
+    <title>Station météo - Données Principal</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-50 font-sans text-gray-800">
     <div class="flex min-h-screen">
-       
-        <aside class="w-58 fixed inset-y-0 bg-gray-800 text-white">
+        <!-- Sidebar -->
+        <aside class="w-64 fixed inset-y-0 bg-gray-800 text-white">
             <div class="p-6">
                 <div class="text-2xl font-bold mb-8 flex items-center gap-2">
-                    📊 Station Météo
+                    <i class="fas fa-chart-line"></i> Station Météo
                 </div>
                 <ul class="space-y-2">
-                    <li class="p-3 rounded-lg hover:bg-gray-700 transition-all duration-300 cursor-pointer">Données Principal</li>
-                    <li class="p-3 rounded-lg hover:bg-gray-700 transition-all duration-300 cursor-pointer">
-                        <a href="params.php">Paramètre</a>
+                    <li class="p-3 rounded-lg bg-gray-700 transition-all duration-300">
+                        <a href="index.php" class="flex items-center gap-2">
+                            <i class="fas fa-home"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="p-3 rounded-lg hover:bg-gray-700 transition-all duration-300">
+                        <a href="params.php" class="flex items-center gap-2">
+                            <i class="fas fa-cog"></i> Paramètres
+                        </a>
                     </li>
                 </ul>
             </div>
@@ -141,5 +162,20 @@ $conn->close();
     data = window.chartData = <?php echo json_encode($data); ?>;
 </script>
 <script src="graph.js"></script>
+<footer class="fixed bottom-0 left-0 w-full bg-gray-800 text-white py-4 px-8">
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+        <div class="text-sm text-gray-400">
+            © <?php echo date('Y'); ?> Station Météo. Tous droits réservés.
+        </div>
+        <div class="flex items-center gap-2 text-sm">
+            <span>Développé avec le</span>
+            <span class="text-red-500 animate-pulse text-lg">❤</span>
+            <span>par</span>
+            <span class="text-blue-400 hover:text-blue-300 transition-colors duration-300">
+            <a href='https://github.com/LinoSauvaire' target="_blank">Lino</a>, <a href='https://github.com/Najeko' target="_blank">Emma</a>, <a href='https://github.com/Chessco13' target="_blank">Jean-Baptiste</a>
+            </span>
+        </div>
+    </div>
+</footer>
 </body>
 </html>
