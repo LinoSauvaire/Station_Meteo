@@ -69,6 +69,12 @@ def log_error():
         traceback.print_exc(file=f)
         print("Detailed error logged to error.log")
 
+#Create user to check the files
+DROP USER IF EXIST 'pi'@'localhost';
+CREATE USER IF NOT EXISTS 'pi'@'localhost' IDENTIFIED BY 'meteo';
+GRANT ALL PRIVILEGES ON station_meteo.* TO 'pi'@'localhost';
+FLUSH PRIVILEGES;
+
 # MariaDB Connection Configuration
 DB_CONFIG = {
     'host': 'localhost',
