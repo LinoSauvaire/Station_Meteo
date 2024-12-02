@@ -1,7 +1,7 @@
 <?php
 $servername = "localhost";
 $username = "root";
-$password = "";
+$password = "meteo";
 $dbname = "station_meteo";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
