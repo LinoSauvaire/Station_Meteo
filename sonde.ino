@@ -1,49 +1,44 @@
-//Weather Station
-//Librairies needed
+// Weather Station
+// Librairies necessaires
 #include <Wire.h>
 #include <WiFi.h>
-#include <PubSubClient.h>
+#include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 
-// WiFi Credentials
+// WiFi Connection
 const char* ssid = "iPhone";
 const char* password = "05062001";
 
-// MQTT Configuration
-const char* mqtt_server = "172.20.10.5";
-const int mqtt_port = 1883;
-const char* mqtt_topic = "sonde1";
-const char* mqtt_client_id = "ESP32_Weather_Station";  // Fixed client ID for debugging
+// API Configuration
+const char* api_url = "http://172.20.10.5/weather_api/api.php";
 
 // Pin Configuration
 #define BME_SDA 18
 #define BME_SCL 19
 
-// Data structure
+// Structure data
 struct WeatherData {
     float temperature_celsius;
     float pressure_hpa;
     float humidity_percent;
 };
 
-// Global objects
+// Object du circuit
 Adafruit_BME280 bme;
-WiFiClient espClient;
-PubSubClient client(espClient);
 
-// Timing
-const unsigned long SEND_INTERVAL = 5000;  // 5 seconds
+// Interval entre les mesures/envois
+const unsigned long SEND_INTERVAL = 10000;  // 10 seconds
 unsigned long lastSendTime = 0;
 
-// WiFi setup with timeout
+// Setup WiFi avec timeout
 void setup_wifi() {
     delay(10);
     Serial.println("\nConnecting to WiFi...");
     Serial.printf("SSID: %s\n", ssid);
 
-    WiFi.mode(WIFI_STA);  // Explicitly set station mode
+    WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
 
     unsigned long startAttemptTime = millis();
@@ -57,66 +52,12 @@ void setup_wifi() {
         Serial.println("\nWiFi connected successfully!");
         Serial.print("IP address: ");
         Serial.println(WiFi.localIP());
-        Serial.print("Signal Strength (RSSI): ");
-        Serial.println(WiFi.RSSI());
     } else {
         Serial.println("\nWiFi connection FAILED");
     }
 }
 
-// Print MQTT state for debugging
-String getMQTTStateString(int state) {
-    switch (state) {
-        case -4: return "MQTT_CONNECTION_TIMEOUT";
-        case -3: return "MQTT_CONNECTION_LOST";
-        case -2: return "MQTT_CONNECT_FAILED";
-        case -1: return "MQTT_DISCONNECTED";
-        case 0: return "MQTT_CONNECTED";
-        case 1: return "MQTT_CONNECT_BAD_PROTOCOL";
-        case 2: return "MQTT_CONNECT_BAD_CLIENT_ID";
-        case 3: return "MQTT_CONNECT_UNAVAILABLE";
-        case 4: return "MQTT_CONNECT_BAD_CREDENTIALS";
-        case 5: return "MQTT_CONNECT_UNAUTHORIZED";
-        default: return "MQTT_UNKNOWN_STATE";
-    }
-}
-
-// MQTT reconnection with debugging
-void reconnect() {
-    int attempts = 0;
-    while (!client.connected() && attempts < 3) {  // Limit reconnection attempts
-        Serial.println("\nAttempting MQTT connection...");
-        Serial.printf("Broker: %s:%d\n", mqtt_server, mqtt_port);
-        Serial.printf("Client ID: %s\n", mqtt_client_id);
-        
-        if (WiFi.status() != WL_CONNECTED) {
-            Serial.println("WiFi not connected. Reconnecting WiFi first...");
-            setup_wifi();
-        }
-
-        if (client.connect(mqtt_client_id)) {
-            Serial.println("MQTT Connected successfully!");
-            
-            // Test message
-            if (client.publish(mqtt_topic, "{\"status\":\"connected\"}")) {
-                Serial.println("Test message sent successfully");
-            } else {
-                Serial.println("Failed to send test message");
-            }
-        } else {
-            int state = client.state();
-            Serial.print("MQTT connection failed, state: ");
-            Serial.print(state);
-            Serial.print(" (");
-            Serial.print(getMQTTStateString(state));
-            Serial.println(")");
-            Serial.println("Retrying in 5 seconds...");
-            delay(5000);
-        }
-        attempts++;
-    }
-}
-
+// foncion pour lire les valeurs du capteur bme
 WeatherData readSensorData() {
     WeatherData data;
     data.temperature_celsius = bme.readTemperature();
@@ -125,6 +66,7 @@ WeatherData readSensorData() {
     return data;
 }
 
+//Checkup des valeurs mesurées
 bool isValidData(const WeatherData& data) {
     return !isnan(data.temperature_celsius) && 
            !isnan(data.pressure_hpa) && 
@@ -134,6 +76,7 @@ bool isValidData(const WeatherData& data) {
            data.humidity_percent >= 0.0 && data.humidity_percent <= 100.0;
 }
 
+//Affichage des valeurs mesurées
 void printMeasurements(const WeatherData& data) {
     Serial.println("\nCurrent Measurements:");
     Serial.printf("Temperature: %.1f °C\n", data.temperature_celsius);
@@ -141,32 +84,49 @@ void printMeasurements(const WeatherData& data) {
     Serial.printf("Humidity: %.1f %%\n", data.humidity_percent);
 }
 
-bool sendData(const WeatherData& data) {
+//Envoi des données à l'API
+bool sendDataToAPI(const WeatherData& data) {
+    if(WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi not connected");
+        return false;
+    }
+
+    HTTPClient http;
+    http.begin(api_url);
+    http.addHeader("Content-Type", "application/json");
+
     StaticJsonDocument<200> doc;
     doc["temperature"] = data.temperature_celsius;
     doc["pressure"] = data.pressure_hpa;
     doc["humidity"] = data.humidity_percent;
 
-    char jsonBuffer[200];
-    serializeJson(doc, jsonBuffer);
+    String jsonString;
+    serializeJson(doc, jsonString);
 
-    Serial.print("Attempting to send data: ");
-    Serial.println(jsonBuffer);
+    Serial.print("Sending data to API: ");
+    Serial.println(jsonString);
 
-    if (client.publish(mqtt_topic, jsonBuffer)) {
-        Serial.println("Data sent successfully");
+    int httpResponseCode = http.POST(jsonString);
+
+    if(httpResponseCode > 0) {
+        String response = http.getString();
+        Serial.println("HTTP Response code: " + String(httpResponseCode));
+        Serial.println("Response: " + response);
+        http.end();
         return true;
     } else {
-        Serial.println("Failed to send data");
-        Serial.printf("MQTT State: %s\n", getMQTTStateString(client.state()).c_str());
+        Serial.print("Error on sending POST: ");
+        Serial.println(httpResponseCode);
+        http.end();
         return false;
     }
 }
 
+//Initialisation ESP32
 void setup() {
     Serial.begin(115200);
-    delay(2000);  // Give time for serial to initialize
-    Serial.println("\nWeather Station - Sonde 1 Starting...");
+    delay(2000);
+    Serial.println("\nWeather Station Starting...");
 
     // Initialize I2C
     Wire.begin();
@@ -181,7 +141,7 @@ void setup() {
     }
     Serial.println("BME280 sensor initialized successfully");
 
-    // Configure BME280
+    // Configuration BME280
     bme.setSampling(Adafruit_BME280::MODE_NORMAL,
                     Adafruit_BME280::SAMPLING_X2,
                     Adafruit_BME280::SAMPLING_X16,
@@ -191,33 +151,23 @@ void setup() {
 
     // Setup WiFi
     setup_wifi();
-
-    // Setup MQTT
-    client.setServer(mqtt_server, mqtt_port);
-    client.setBufferSize(512);  //a voir si pas besoin de l'augmenter
 }
 
+//Boucle principale
 void loop() {
-    // Check WiFi connection
+    // Check WiFi connexion
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("WiFi connection lost. Reconnecting...");
         setup_wifi();
     }
 
-    // Check MQTT connection
-    if (!client.connected()) {
-        Serial.println("MQTT disconnected. Reconnecting...");
-        reconnect();
-    }
-    client.loop();
-
-    // Read and send data at intervals
+    // Lire et envoyer les données
     if (millis() - lastSendTime > SEND_INTERVAL) {
         WeatherData data = readSensorData();
         
         if (isValidData(data)) {
             printMeasurements(data);
-            if (sendData(data)) {
+            if (sendDataToAPI(data)) {
                 lastSendTime = millis();
             }
         } else {
