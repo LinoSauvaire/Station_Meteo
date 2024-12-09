@@ -8,7 +8,7 @@
 
 const char* server = "172.20.10.5";
 const char* ssid = "1883";
-const char* password = "je suis pas sur pour cette ligne"; // faire verifier par lino
+const char* password = "???"; //mdp pour connexion serveur
 
 // Déclaration des floats verifier sur internet c'est quoi
 float temperature = 0;
