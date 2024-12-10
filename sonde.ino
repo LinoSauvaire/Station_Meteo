@@ -1,11 +1,10 @@
-// Weather Station
-// Librairies necessaires
 #include <Wire.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
+#include <LiquidCrystal_I2C.h>
 
 // WiFi Connection
 const char* ssid = "iPhone";
@@ -14,25 +13,30 @@ const char* password = "05062001";
 // API Configuration
 const char* api_url = "http://172.20.10.5/weather_api/api.php";
 
+//Declaration ecran lcd
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
 // Pin Configuration
 #define BME_SDA 18
 #define BME_SCL 19
+#define LCD_SDA 18
+#define LCD_SCL 19
 
-// Structure data
+// Data structure
 struct WeatherData {
-    float temperature_celsius;
-    float pressure_hpa;
-    float humidity_percent;
+    float temperature;
+    float pressure;
+    float humidity;
 };
 
-// Object du circuit
+// Global object
 Adafruit_BME280 bme;
 
-// Interval entre les mesures/envois
-const unsigned long SEND_INTERVAL = 5000;  // 5 secondes
+// Interval lecture/envoi
+const unsigned long SEND_INTERVAL = 5000;  // 5 seconds
 unsigned long lastSendTime = 0;
 
-// Setup WiFi avec timeout
+// WiFi setup with timeout
 void setup_wifi() {
     delay(10);
     Serial.println("\nConnecting to WiFi...");
@@ -57,34 +61,30 @@ void setup_wifi() {
     }
 }
 
-// foncion pour lire les valeurs du capteur bme
 WeatherData readSensorData() {
     WeatherData data;
-    data.temperature_celsius = bme.readTemperature();
-    data.pressure_hpa = bme.readPressure() / 100.0F;
-    data.humidity_percent = bme.readHumidity();
+    data.temperature = bme.readTemperature();
+    data.pressure = bme.readPressure() / 100.0F;
+    data.humidity = bme.readHumidity();
     return data;
 }
 
-//Checkup des valeurs mesurées
 bool isValidData(const WeatherData& data) {
-    return !isnan(data.temperature_celsius) && 
-           !isnan(data.pressure_hpa) && 
-           !isnan(data.humidity_percent) &&
-           data.temperature_celsius > -40.0 && data.temperature_celsius < 85.0 &&
-           data.pressure_hpa > 300.0 && data.pressure_hpa < 1100.0 &&
-           data.humidity_percent >= 0.0 && data.humidity_percent <= 100.0;
+    return !isnan(data.temperature) && 
+           !isnan(data.pressure) && 
+           !isnan(data.humidity) &&
+           data.temperature > -40.0 && data.temperature < 85.0 &&
+           data.pressure > 300.0 && data.pressure < 1100.0 &&
+           data.humidity >= 0.0 && data.humidity <= 100.0;
 }
 
-//Affichage des valeurs mesurées
 void printMeasurements(const WeatherData& data) {
     Serial.println("\nCurrent Measurements:");
-    Serial.printf("Temperature: %.1f °C\n", data.temperature_celsius);
-    Serial.printf("Pressure: %.1f hPa\n", data.pressure_hpa);
-    Serial.printf("Humidity: %.1f %%\n", data.humidity_percent);
+    Serial.printf("Temperature: %.1f °C\n", data.temperature);
+    Serial.printf("Pressure: %.1f hPa\n", data.pressure);
+    Serial.printf("Humidity: %.1f %%\n", data.humidity);
 }
 
-//Envoi des données à l'API
 bool sendDataToAPI(const WeatherData& data) {
     if(WiFi.status() != WL_CONNECTED) {
         Serial.println("WiFi not connected");
@@ -96,9 +96,9 @@ bool sendDataToAPI(const WeatherData& data) {
     http.addHeader("Content-Type", "application/json");
 
     StaticJsonDocument<200> doc;
-    doc["temperature"] = data.temperature_celsius;
-    doc["pressure"] = data.pressure_hpa;
-    doc["humidity"] = data.humidity_percent;
+    doc["temperature"] = data.temperature;
+    doc["pressure"] = data.pressure;
+    doc["humidity"] = data.humidity;
 
     String jsonString;
     serializeJson(doc, jsonString);
@@ -122,7 +122,6 @@ bool sendDataToAPI(const WeatherData& data) {
     }
 }
 
-//Initialisation ESP32
 void setup() {
     Serial.begin(115200);
     delay(2000);
@@ -131,6 +130,12 @@ void setup() {
     // Initialize I2C
     Wire.begin();
     Serial.println("I2C initialized");
+
+    //Initialisation LCD
+    lcd.init();  // Initialisation de l'écran LCD
+    lcd.backlight();
+    lcd.setCursor(0, 0);      
+    lcd.print("Bienvenue !");
     
     // Initialize BME280
     if (!bme.begin(0x76)) {
@@ -141,7 +146,7 @@ void setup() {
     }
     Serial.println("BME280 sensor initialized successfully");
 
-    // Configuration BME280
+    // Configure BME280
     bme.setSampling(Adafruit_BME280::MODE_NORMAL,
                     Adafruit_BME280::SAMPLING_X2,
                     Adafruit_BME280::SAMPLING_X16,
@@ -153,15 +158,14 @@ void setup() {
     setup_wifi();
 }
 
-//Boucle principale
 void loop() {
-    // Check WiFi connexion
+    // Check WiFi connection
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("WiFi connection lost. Reconnecting...");
         setup_wifi();
     }
 
-    // Lire et envoyer les données
+    // Read and send data at intervals
     if (millis() - lastSendTime > SEND_INTERVAL) {
         WeatherData data = readSensorData();
         
