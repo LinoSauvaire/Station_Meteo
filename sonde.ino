@@ -29,7 +29,7 @@ struct WeatherData {
 Adafruit_BME280 bme;
 
 // Interval entre les mesures/envois
-const unsigned long SEND_INTERVAL = 10000;  // 10 seconds
+const unsigned long SEND_INTERVAL = 5000;  // 5 secondes
 unsigned long lastSendTime = 0;
 
 // Setup WiFi avec timeout
